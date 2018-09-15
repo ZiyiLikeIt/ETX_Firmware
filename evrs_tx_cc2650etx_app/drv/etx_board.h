@@ -30,7 +30,7 @@ extern const PIN_Config BoardGpioInitTable[];
  *  Defines
  *  ==========================================================================*/
 
-/* Same RF Configuration as 7x7 EM */
+/* Same RF Configuration as 5XD */
 #define CC2650EM_5XD
 
 /* Mapping of pins to board signals using general board aliases
@@ -38,26 +38,29 @@ extern const PIN_Config BoardGpioInitTable[];
  */
 
 /* Discrete outputs */
-#define Board_RLED          IOID_3
-#define Board_GLED          IOID_2
-#define Board_LED_ON        1
-#define Board_LED_OFF       0
+#define Board_RLED         	IOID_13
+#define Board_BLED         	IOID_14
+#define Board_LED_ON       	1
+#define Board_LED_OFF      	0
+#define Board_SOFT_PWR			IOID_9
 
 /* Discrete inputs */
-#define Board_BTN0          IOID_10
-#define Board_BTN1          IOID_9
-#define Board_BTN2          IOID_4
-#define Board_BTN3          IOID_8
-#define Board_BTN4          IOID_11
-#define Board_BTN5          IOID_12
-#define Board_BTN6          IOID_13
-#define Board_BTN7          IOID_14
+#define Board_KEY1			IOID_12
+#define Board_KEY2			IOID_5
+#define Board_KEY3         	IOID_2
+#define Board_KEY4         	IOID_11
+#define Board_KEY5         	IOID_6
+#define Board_KEY6         	IOID_3
+#define Board_KEY7         	IOID_10
+#define Board_KEY8         	IOID_7
+#define Board_KEY9         	IOID_4
+#define Board_KEY_OK       	IOID_1
 
 /* UART Board */
-#define Board_UART_RX       IOID_1          /* RXD  */
-#define Board_UART_TX       IOID_0          /* TXD  */
+#define Board_UART_RX      	PIN_UNASSIGNED
+#define Board_UART_TX      	IOID_0
 
 /* ADC Vin */
-#define Board_ADC           IOID_7
+#define Board_ADCIN       	IOID_8
 
 #endif /* ETXBOARD_H */

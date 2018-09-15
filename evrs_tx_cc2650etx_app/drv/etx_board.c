@@ -45,20 +45,22 @@
 
 const PIN_Config BoardGpioInitTable[] = {
 
-    Board_RLED   | PIN_GPIO_OUTPUT_EN | PIN_GPIO_LOW | PIN_PUSHPULL | PIN_DRVSTR_MAX, /* LED initially off             */
-    Board_GLED   | PIN_GPIO_OUTPUT_EN | PIN_GPIO_LOW | PIN_PUSHPULL | PIN_DRVSTR_MAX, /* LED initially off             */
+    Board_RLED   	| PIN_GPIO_OUTPUT_EN | PIN_GPIO_LOW | PIN_PUSHPULL | PIN_DRVSTR_MAX,
+    Board_BLED   	| PIN_GPIO_OUTPUT_EN | PIN_GPIO_LOW | PIN_PUSHPULL | PIN_DRVSTR_MAX,
+	Board_SOFT_PWR 	| PIN_GPIO_OUTPUT_EN | PIN_GPIO_LOW | PIN_PUSHPULL | PIN_DRVSTR_MAX,
 
-    Board_BTN0   | PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES | PIN_HYSTERESIS,    /* Button is active low          */
-    Board_BTN1   | PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES | PIN_HYSTERESIS,    /* Button is active low          */
-    Board_BTN2   | PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES | PIN_HYSTERESIS,    /* Button is active low          */
-    Board_BTN3   | PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES | PIN_HYSTERESIS,    /* Button is active low          */
-    Board_BTN4   | PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES | PIN_HYSTERESIS,    /* Button is active low          */
-    Board_BTN5   | PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES | PIN_HYSTERESIS,    /* Button is active low          */
-    Board_BTN6   | PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES | PIN_HYSTERESIS,    /* Button is active low          */
-    Board_BTN7   | PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES | PIN_HYSTERESIS,    /* Button is active low          */
+    Board_KEY1   	| PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES | PIN_HYSTERESIS,
+    Board_KEY2   	| PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES | PIN_HYSTERESIS,
+    Board_KEY3   	| PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES | PIN_HYSTERESIS,
+    Board_KEY4   	| PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES | PIN_HYSTERESIS,
+    Board_KEY5   	| PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES | PIN_HYSTERESIS,
+    Board_KEY6   	| PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES | PIN_HYSTERESIS,
+    Board_KEY7   	| PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES | PIN_HYSTERESIS,
+	Board_KEY8   	| PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES | PIN_HYSTERESIS,
+	Board_KEY9   	| PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES | PIN_HYSTERESIS,
+	Board_KEY_OK	| PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES | PIN_HYSTERESIS,
 
-    Board_UART_RX | PIN_INPUT_EN | PIN_PULLDOWN,                                      /* UART RX via debugger back channel */
-    Board_UART_TX | PIN_GPIO_OUTPUT_EN | PIN_GPIO_HIGH | PIN_PUSHPULL,                /* UART TX via debugger back channel */
+    Board_UART_TX 	| PIN_GPIO_OUTPUT_EN | PIN_GPIO_HIGH | PIN_PUSHPULL,
 
     PIN_TERMINATE
 };
@@ -234,4 +236,45 @@ const TRNGCC26XX_Config TRNGCC26XX_config[] = {
 
 /*
  *  ========================= TRNG end ====================================
+ */
+
+/*
+ *  ========================== ADC begin =========================================
+ */
+/* Place into subsections to allow the TI linker to remove items properly */
+#if defined(__TI_COMPILER_VERSION__)
+#pragma DATA_SECTION(ADC_config, ".const:ADC_config")
+#pragma DATA_SECTION(adcCC26xxHWAttrs, ".const:adcCC26xxHWAttrs")
+#endif
+
+/* Include drivers */
+#include <ti/drivers/ADC.h>
+#include <ti/drivers/adc/ADCCC26XX.h>
+
+/* ADC objects */
+ADCCC26XX_Object adcCC26xxObjects[1];
+
+
+const ADCCC26XX_HWAttrs adcCC26xxHWAttrs[1] = {
+    {
+        .adcDIO = Board_ADCIN,
+        .adcCompBInput = ADC_COMPB_IN_AUXIO0,
+        .refSource = ADCCC26XX_FIXED_REFERENCE,
+        .samplingDuration = ADCCC26XX_SAMPLING_DURATION_10P6_US,
+        .inputScalingEnabled = true,
+        .triggerSource = ADCCC26XX_TRIGGER_MANUAL
+    }
+};
+
+const ADC_Config ADC_config[] = {
+    {
+    	.fxnTablePtr = &ADCCC26XX_fxnTable,
+		.object = &adcCC26xxObjects[0],
+		.hwAttrs = &adcCC26xxHWAttrs[0]
+    },
+    {NULL, NULL, NULL}
+};
+
+/*
+ *  ========================== ADC end =========================================
  */

@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-file	board_led.h
+file	etx_board_led.h
 
 brief	This file contains the CC2650 LaunchXL LED service definitions and 
 		prototypes

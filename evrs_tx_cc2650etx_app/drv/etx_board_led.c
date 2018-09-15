@@ -1,6 +1,6 @@
 /*****************************************************************************
 
- file	board_led.c
+ file	etx_board_led.c
 
  brief	This file contains the functions and params to implement CC2650
  LaunchXL LED service.
@@ -37,7 +37,7 @@
  */
 PIN_Config ledPinTable[] = {
 	Board_RLED | PIN_GPIO_OUTPUT_EN | PIN_GPIO_LOW | PIN_PUSHPULL | PIN_DRVSTR_MAX,
-	Board_GLED | PIN_GPIO_OUTPUT_EN | PIN_GPIO_LOW | PIN_PUSHPULL | PIN_DRVSTR_MAX,
+	Board_BLED | PIN_GPIO_OUTPUT_EN | PIN_GPIO_LOW | PIN_PUSHPULL | PIN_DRVSTR_MAX,
 	PIN_TERMINATE };
 
 /*********************************************************************
