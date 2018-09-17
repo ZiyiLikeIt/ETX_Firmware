@@ -42,7 +42,7 @@ extern const PIN_Config BoardGpioInitTable[];
 #define Board_BLED         	IOID_14
 #define Board_LED_ON       	1
 #define Board_LED_OFF      	0
-#define Board_SOFT_PWR			IOID_9
+#define Board_SPWR			IOID_9
 
 /* Discrete inputs */
 #define Board_KEY1			IOID_12
@@ -54,7 +54,7 @@ extern const PIN_Config BoardGpioInitTable[];
 #define Board_KEY7         	IOID_10
 #define Board_KEY8         	IOID_7
 #define Board_KEY9         	IOID_4
-#define Board_KEY_OK       	IOID_1
+#define Board_KEY10       	IOID_1
 
 /* UART Board */
 #define Board_UART_RX      	PIN_UNASSIGNED

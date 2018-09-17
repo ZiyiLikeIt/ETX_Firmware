@@ -29,7 +29,7 @@
  */
 #define BOARD_LED_FLASH_PERIOD 500
 
-#define IDPARSER(x) ((x == BOARD_LED_ID_R)?(Board_RLED):((x == BOARD_LED_ID_G)?(Board_GLED):(PIN_UNASSIGNED)))
+#define IDPARSER(x) (x == BOARD_RLED)?(Board_RLED):(Board_BLED)
 
 /*
  * Application LED pin configuration table:
@@ -54,7 +54,7 @@ static PIN_State ledPinState;
 static PIN_Handle ledPinHandle;
 
 /* LED state table */
-static boardLedState_t ledState[2];
+static BoardLedState_t ledState[2];
 
 /*********************************************************************
  * Local Functions
@@ -80,15 +80,15 @@ void Board_initLEDs(void) {
 
 	/* Set default value */
 	PIN_setOutputValue(ledPinHandle, Board_RLED, BOARD_LED_STATE_OFF);
-	PIN_setOutputValue(ledPinHandle, Board_GLED, BOARD_LED_STATE_OFF);
-	ledState[BOARD_LED_ID_R] = BOARD_LED_STATE_OFF;
-	ledState[BOARD_LED_ID_R] = BOARD_LED_STATE_OFF;
+	PIN_setOutputValue(ledPinHandle, Board_BLED, BOARD_LED_STATE_OFF);
+	ledState[BOARD_RLED] = BOARD_LED_STATE_OFF;
+	ledState[BOARD_BLED] = BOARD_LED_STATE_OFF;
 
 	/* construct clock to control the flashing */
-	Util_constructClock(&ledFlashClk[BOARD_LED_ID_R], Board_ledFlashTimeoutCB,
-	BOARD_LED_FLASH_PERIOD, 0, false, BOARD_LED_ID_R);
-	Util_constructClock(&ledFlashClk[BOARD_LED_ID_G], Board_ledFlashTimeoutCB,
-	BOARD_LED_FLASH_PERIOD, 0, false, BOARD_LED_ID_G);
+	Util_constructClock(&ledFlashClk[BOARD_RLED], Board_ledFlashTimeoutCB,
+			BOARD_LED_FLASH_PERIOD, 0, false, BOARD_RLED);
+	Util_constructClock(&ledFlashClk[BOARD_BLED], Board_ledFlashTimeoutCB,
+			BOARD_LED_FLASH_PERIOD, 0, false, BOARD_BLED);
 }
 
 /*****************************************************************************
@@ -102,7 +102,7 @@ void Board_initLEDs(void) {
  *
  * @return  none
  */
-void Board_ledControl(boardLedId_t ledId, boardLedState_t state,
+void Board_ledControl(BoardLedId_t ledId, BoardLedState_t state,
 		uint32_t period) {
 	switch (state)
 	{
@@ -130,24 +130,11 @@ void Board_ledControl(boardLedId_t ledId, boardLedState_t state,
 }
 
 /*
- static uint32_t Board_ledIdParser(boardLedId_t ledId)
- {
- 	 switch(ledId)
- 	 {
-		 case BOARD_LED_ID_R:
-		 return Board_RLED;
-
-		 case BOARD_LED_ID_G:
-		 return Board_GLED;
-
-		 default:
-		 return PIN_UNASSIGNED;
- 	 }
- }
+ * timer timeout callback
  */
 static void Board_ledFlashTimeoutCB(UArg ledId) {
-	PIN_setOutputValue(ledPinHandle, IDPARSER((boardLedId_t ) ledId),
-			!PIN_getOutputValue(IDPARSER((boardLedId_t ) ledId)));
+	PIN_setOutputValue(ledPinHandle, IDPARSER((BoardLedId_t ) ledId),
+			!PIN_getOutputValue(IDPARSER((BoardLedId_t ) ledId)));
 
 	Util_startClock(&ledFlashClk[ledId]);
 }

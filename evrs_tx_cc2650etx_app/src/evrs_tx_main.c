@@ -450,8 +450,8 @@ static void ETX_init(void) {
 	HCI_LE_ReadMaxDataLenCmd();
 
 	uout0("EVRS TX initialized");
-	Board_ledControl(BOARD_LED_ID_G, BOARD_LED_STATE_FLASH, 300);
-	//Board_ledControl(BOARD_LED_ID_R, BOARD_LED_STATE_ON, 0);
+	Board_ledControl(BOARD_RLED, BOARD_LED_STATE_FLASH, 300);
+	//Board_ledControl(BOARD_BLED, BOARD_LED_STATE_ON, 0);
 }
 
 /*********************************************************************
@@ -797,7 +797,7 @@ static void ETX_processStateChangeEvt(gaprole_States_t newState) {
 			// Display device address
 			uout0(Util_convertBdAddr2Str(ownAddress));
 			uout0("Initialized");
-			Board_ledControl(BOARD_LED_ID_R, BOARD_LED_STATE_OFF, 0);
+			Board_ledControl(BOARD_BLED, BOARD_LED_STATE_OFF, 0);
 
 		}
 			break;
@@ -805,7 +805,7 @@ static void ETX_processStateChangeEvt(gaprole_States_t newState) {
 		case GAPROLE_ADVERTISING:
 			appState = APP_STATE_IDLE;
 			uout0("Advertising");
-			Board_ledControl(BOARD_LED_ID_R, BOARD_LED_STATE_FLASH, 100);
+			Board_ledControl(BOARD_BLED, BOARD_LED_STATE_FLASH, 100);
 			break;
 
 #ifdef PLUS_BROADCASTER
@@ -860,7 +860,7 @@ static void ETX_processStateChangeEvt(gaprole_States_t newState) {
 				uout0("Connected");
 				uout0(Util_convertBdAddr2Str(peerAddress));
 			}
-			Board_ledControl(BOARD_LED_ID_R, BOARD_LED_STATE_FLASH, 500);
+			Board_ledControl(BOARD_BLED, BOARD_LED_STATE_FLASH, 500);
 
 #ifdef PLUS_BROADCASTER
 			// Only turn advertising on for this state when we first connect
@@ -895,7 +895,7 @@ static void ETX_processStateChangeEvt(gaprole_States_t newState) {
 			ETX_freeAttRsp(bleNotConnected);
 
 			uout0("Disconnected");
-			Board_ledControl(BOARD_LED_ID_R, BOARD_LED_STATE_OFF, 0);
+			Board_ledControl(BOARD_BLED, BOARD_LED_STATE_OFF, 0);
 
 			// Clear remaining lines
 			//Display_clearLines(dispHandle, 3, 5);
@@ -1033,7 +1033,7 @@ static void ETX_handleKeys(uint8_t shift, uint8_t keys) {
 			break;
 
 		case APP_STATE_IDLE:
-			if (keys & S1)
+			if (keys & KEY1)
 			{
 				ETX_Advert_UpdateDestinyBS();
 				bStatus_t rtn = 0;
@@ -1046,11 +1046,11 @@ static void ETX_handleKeys(uint8_t shift, uint8_t keys) {
 			break;
 		case APP_STATE_ADVERT:
 
-			if (keys & S2) {
+			if (keys & KEY2) {
 				uint8_t newValue = 0x22;
 				EVRSProfile_SetParameter(EVRSPROFILE_DATA, sizeof(uint8_t), &newValue );
 				uout0("set to 0x22");
-			} else if (keys & S3) {
+			} else if (keys & KEY3) {
 			    uint8_t newValue = 0x33;
 			    EVRSProfile_SetParameter(EVRSPROFILE_DATA, sizeof(uint8_t), &newValue );
 			    uout0("set to 0x33");
