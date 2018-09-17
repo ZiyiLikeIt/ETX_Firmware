@@ -26,46 +26,45 @@ extern "C"
  */
 
 /** LED Identifications **/
-typedef enum BoardLedId_t {
+typedef enum BoardLedID_t {
     	BOARD_RLED,
 		BOARD_BLED
-} BoardLedId_t;
+} BoardLedID_t;
 
-
-/** LED States */
+/** LED state list **/
 typedef enum BoardLedState_t {
     	BOARD_LED_STATE_OFF,
 		BOARD_LED_STATE_ON,
-		BOARD_LED_STATE_FLASH
+		BOARD_LED_STATE_TOGGLE,
+		BOARD_LED_STATE_FLASH,
+		BOARD_LED_STATE_LOWFLASH
 } BoardLedState_t;
 
-
-/*****************************************************************************
- * @fn      Board_initLEDs
- *
- * @brief   Initial the LED services.
- *
- * @param   void
- *
- * @return  none
+/*
+ * External functions
  */
+
+/** Initial the LED services **/
 void Board_initLEDs(void);
 
-/*****************************************************************************
- * @fn      Board_ledControl
- *
- * @brief   Change the lED state between off, on and flashing
- *
- * @param   boardLedId_t ledId to indicate the LED being control
- 			boardLedState_t state to indicate the state turning to
- 			uint32_t period was used if the state is flashing
- *
- * @return  none
- */
-void Board_ledControl(BoardLedId_t ledId, BoardLedState_t state, uint32_t period);
+/** Set the board led into corresponding state **/
+void Board_ledControl(BoardLedID_t ledID, BoardLedState_t state, uint32_t period);
 
+/** For external call **/
+#define Board_ledOFF(ledID) \
+	Board_ledControl((BoardLedID_t) ledID, BOARD_LED_STATE_OFF, 0)
 
+#define Board_ledON(ledID) \
+	Board_ledControl((BoardLedID_t) ledID, BOARD_LED_STATE_ON, 0)
 
+#define Board_ledToggle(ledID) \
+	Board_ledControl((BoardLedID_t) ledID, BOARD_LED_STATE_TOGGLE, 0)
+
+#define Board_ledFlash(ledID, prd) \
+	Board_ledControl((BoardLedID_t) ledID, BOARD_LED_STATE_FLASH, (uint32_t) prd)
+
+#define Board_ledLowFlash(ledID, prd) \
+	Board_ledControl((BoardLedID_t) ledID, BOARD_LED_STATE_LOWFLASH, (uint32_t) prd)
 
 #ifdef __cplusplus
 }

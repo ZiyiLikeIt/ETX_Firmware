@@ -27,9 +27,10 @@
 /*********************************************************************
  * Typedefs
  */
-#define BOARD_LED_FLASH_PERIOD 500
+#define DEFAULT_FLASH_PERIOD 500
 
 #define IDPARSER(x) (x == BOARD_RLED)?(Board_RLED):(Board_BLED)
+
 
 /*
  * Application LED pin configuration table:
@@ -50,17 +51,19 @@ static Clock_Struct ledFlashClk[2];
 /* LED pin state */
 static PIN_State ledPinState;
 
+
 /* LED Pin Handle */
 static PIN_Handle ledPinHandle;
 
 /* LED state table */
-static BoardLedState_t ledState[2];
+static BoardLedState_t ledState[2] = {BOARD_LED_STATE_OFF};
+static uint32_t ledPeriod[2] = {DEFAULT_FLASH_PERIOD};
 
 /*********************************************************************
  * Local Functions
  */
-//static uint32_t Board_ledIdParser(boardLedId_t id);
-static void Board_ledFlashTimeoutCB(UArg ledId);
+//static uint32_t Board_ledIDParser(boardLedId_t id);
+static void Board_ledFlashTimeoutCB(UArg ledID);
 
 /*********************************************************************
  * Public Functions
@@ -81,14 +84,12 @@ void Board_initLEDs(void) {
 	/* Set default value */
 	PIN_setOutputValue(ledPinHandle, Board_RLED, BOARD_LED_STATE_OFF);
 	PIN_setOutputValue(ledPinHandle, Board_BLED, BOARD_LED_STATE_OFF);
-	ledState[BOARD_RLED] = BOARD_LED_STATE_OFF;
-	ledState[BOARD_BLED] = BOARD_LED_STATE_OFF;
 
 	/* construct clock to control the flashing */
 	Util_constructClock(&ledFlashClk[BOARD_RLED], Board_ledFlashTimeoutCB,
-			BOARD_LED_FLASH_PERIOD, 0, false, BOARD_RLED);
+			ledPeriod[BOARD_RLED], 0, false, BOARD_RLED);
 	Util_constructClock(&ledFlashClk[BOARD_BLED], Board_ledFlashTimeoutCB,
-			BOARD_LED_FLASH_PERIOD, 0, false, BOARD_BLED);
+			ledPeriod[BOARD_BLED], 0, false, BOARD_BLED);
 }
 
 /*****************************************************************************
@@ -102,39 +103,51 @@ void Board_initLEDs(void) {
  *
  * @return  none
  */
-void Board_ledControl(BoardLedId_t ledId, BoardLedState_t state,
+void Board_ledControl(BoardLedID_t ledID, BoardLedState_t state,
 		uint32_t period) {
-	switch (state)
-	{
+	switch (state) {
 		case BOARD_LED_STATE_OFF:
-			PIN_setOutputValue(ledPinHandle, IDPARSER(ledId), 0);
-			if (ledState[ledId] == BOARD_LED_STATE_FLASH) Util_stopClock(
-					&ledFlashClk[ledId]);
-			break;
+			PIN_setOutputValue(ledPinHandle, IDPARSER(ledID), 0);
+			if (ledState[ledID] == BOARD_LED_STATE_FLASH)
+				Util_stopClock(&ledFlashClk[ledID]);
+		break;
 
 		case BOARD_LED_STATE_ON:
-			PIN_setOutputValue(ledPinHandle, IDPARSER(ledId), 1);
-			if (ledState[ledId] == BOARD_LED_STATE_FLASH) Util_stopClock(
-					&ledFlashClk[ledId]);
-			break;
+			PIN_setOutputValue(ledPinHandle, IDPARSER(ledID), 1);
+			if (ledState[ledID] == BOARD_LED_STATE_FLASH)
+				Util_stopClock(&ledFlashClk[ledID]);
+		break;
+
+		case BOARD_LED_STATE_TOGGLE:
+			if (ledState[ledID] == BOARD_LED_STATE_FLASH)
+				Util_stopClock(&ledFlashClk[ledID]);
+			PIN_setOutputValue(ledPinHandle, IDPARSER(ledID),
+					!PIN_getOutputValue(IDPARSER(ledID)));
+		break;
 
 		case BOARD_LED_STATE_FLASH:
-			PIN_setOutputValue(ledPinHandle, IDPARSER(ledId), 0);
-			Util_restartClock(&ledFlashClk[ledId], period);
-			break;
+			PIN_setOutputValue(ledPinHandle, IDPARSER(ledID), 0);
+			Util_restartClock(&ledFlashClk[ledID], period);
+		break;
 
 		default:
-			break;
+		break;
 	}
-	ledState[ledId] = state;
+	ledState[ledID] = state;
 }
 
 /*
  * timer timeout callback
  */
-static void Board_ledFlashTimeoutCB(UArg ledId) {
-	PIN_setOutputValue(ledPinHandle, IDPARSER((BoardLedId_t ) ledId),
-			!PIN_getOutputValue(IDPARSER((BoardLedId_t ) ledId)));
+static void Board_ledFlashTimeoutCB(UArg ledID) {
+	ledID = (BoardLedID_t) ledID;
+	uint8_t currState = 0;
+	currState = PIN_getOutputValue(IDPARSER(ledID));
+	PIN_setOutputValue(ledPinHandle, IDPARSER(ledID), !currState);
 
-	Util_startClock(&ledFlashClk[ledId]);
+	if (ledState[ledID] == BOARD_LED_STATE_FLASH)
+		Util_startClock(&ledFlashClk[ledID]);
+	else if (ledState[ledID] == BOARD_LED_STATE_LOWFLASH)
+		Util_restartClock(&ledFlashClk[ledID],
+				(currState == 0)?(100):(ledPeriod[ledID]));
 }
