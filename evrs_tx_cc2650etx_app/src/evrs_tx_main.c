@@ -42,7 +42,8 @@
 #include "rcosc_calibration.h"
 #endif //USE_RCOSC
 
-//#include "etx_board.h"
+#include "etx_board.h"
+#include <ti/drivers/ADC.h>
 #include "etx_board_key.h"
 #include "etx_board_led.h"
 #include "etx_board_display.h"
@@ -165,7 +166,8 @@ static uint8_t advertData[] = {
 		LO_UINT16(ETXPROFILE_SERV_UUID), HI_UINT16(ETXPROFILE_SERV_UUID),
 
 		0x02,
-		ETX_ADTYPE_DEST, 0x00 };
+		ETX_ADTYPE_DEST, 0x00
+};
 
 // GAP - SCAN RSP data (max size = 31 bytes)
 static uint8_t scanRspData[15] = {
@@ -183,7 +185,8 @@ static uint8_t scanRspData[15] = {
 
 		// Device ID rsp
 		0x05,
-		ETX_ADTYPE_DEVID, 0x00, 0x00, 0x00, 0x00 };
+		ETX_ADTYPE_DEVID, 0x00, 0x00, 0x00, 0x00
+};
 
 // GAP GATT Attributes
 static const uint8_t attDeviceName[GAP_DEVICE_NAME_LEN] = "EVRS Transmitter";
@@ -239,6 +242,9 @@ static void ETX_DevId_Find(uint8_t* nvBuf);
 static void ETX_DevId_Refresh(uint8_t IdPrefix, uint8_t* nvBuf);
 static void ETX_DevID_updateScanRsp();
 
+/** Battery Level **/
+static uint16_t ETX_ADC_batLevelGet();
+
 /*********************************************************************
  * EXTERN FUNCTIONS
  */
@@ -249,7 +255,8 @@ extern void AssertHandler(uint8 assertCause, uint8 assertSubcause);
  */
 
 // GAP Role Callbacks
-static gapRolesCBs_t ETX_gapRoleCBs = { ETX_CB_GAPRoleStateChange // Profile State Change Callbacks
+static gapRolesCBs_t ETX_gapRoleCBs = {
+		ETX_CB_GAPRoleStateChange // Profile State Change Callbacks
 		};
 
 // GAP Bond Manager Callbacks
@@ -259,8 +266,10 @@ NULL, // Passcode callback (not used by application)
 		};
 
 // Simple GATT Profile Callbacks
-static ETXProfileCBs_t ETX_ETXProfileCBs = { ETX_CB_charValueChange,
-		ETX_CB_charValueEnquire };
+static ETXProfileCBs_t ETX_ETXProfileCBs = {
+		ETX_CB_charValueChange,
+		ETX_CB_charValueEnquire
+		};
 
 /*********************************************************************
  * PUBLIC FUNCTIONS
@@ -317,6 +326,8 @@ static void ETX_init(void) {
 	Board_initKeys(ETX_CB_keyPress);
 	Board_initLEDs();
 	Board_Display_Init();
+	ADC_init();
+	Board_ledFlash(BOARD_RLED, 300);
 
 	// Device ID check
 	{
@@ -332,7 +343,7 @@ static void ETX_init(void) {
 	// Setup the GAP Peripheral Role Profile
 	{
 		// For all hardware platforms, device starts advertising upon initialization
-		uint8_t initialAdvertEnable = TRUE;
+		uint8_t initialAdvertEnable = FALSE;
 
 		// By setting this to zero, the device will go into the waiting state after
 		// being discoverable for 30.72 second, and will not being advertising again
@@ -435,8 +446,13 @@ static void ETX_init(void) {
 
 	HCI_LE_ReadMaxDataLenCmd();
 
-	uout0("EVRS TX initialized");
-	Board_ledFlash(BOARD_RLED, 300);
+	uout0("ETX Task initialized");
+	{
+		uint16_t batLevel = ETX_ADC_batLevelGet();
+		uout1("battery level: 0x%03x", batLevel);
+		isBatLow = (batLevel < 0x0100) ? 1 : 0;
+	}
+
 }
 
 /*********************************************************************
@@ -762,18 +778,15 @@ static void ETX_EVT_GAPRoleStateChange(gaprole_States_t newState) {
 			DevInfo_SetParameter(DEVINFO_SYSTEM_ID, DEVINFO_SYSTEM_ID_LEN,
 					systemId);
 
-			appState = APP_STATE_IDLE;
+			ETX_CBm_appStateChange(APP_STATE_INIT);
 
-			uout0("Initialized");
-			Board_ledOFF(BOARD_BLED);
+			uout0("GAP Role Initialized");
 
 		}
 		break;
 
 		case GAPROLE_ADVERTISING: {
-			appState = APP_STATE_IDLE;
 			uout0("Advertising");
-			Board_ledFlash(BOARD_BLED, 100);
 		}
 		break;
 
@@ -798,7 +811,6 @@ static void ETX_EVT_GAPRoleStateChange(gaprole_States_t newState) {
 				uout0("Connected");
 				uout0(Util_convertBdAddr2Str(peerAddress));
 			}
-			Board_ledControl(BOARD_BLED, BOARD_LED_STATE_FLASH, 500);
 
 		}
 		break;
@@ -811,7 +823,7 @@ static void ETX_EVT_GAPRoleStateChange(gaprole_States_t newState) {
 			ETX_freeAttRsp(bleNotConnected);
 
 			uout0("Disconnected");
-			Board_ledOFF(BOARD_BLED);
+			// Board_ledOFF(BOARD_BLED);
 		break;
 
 		case GAPROLE_WAITING_AFTER_TIMEOUT:
@@ -889,14 +901,13 @@ static void ETX_EVT_keyPress(uint8_t shift, uint8_t keys) {
 	// all keys should be exclusive
 	// ok and lower number will have higher priority
 
+	// uout1("key pressed: S%d", keys);
 	switch (appState) {
 		case APP_STATE_INIT:
 			if (keys < KEY_OK) { // number key pressed
-				uint8_t keyNum = 0;
-				for (keyNum = 1; keyNum <= 9; keyNum++)
-					if ((keys << keyNum) & 0x0200 == 1) break;
-				destBSID = keyNum;
+				destBSID = keys;
 				advertData[9] = destBSID;
+				uout1("destiny BS set to: %d", destBSID);
 			}
 
 			if ((keys == KEY_OK) && (destBSID != 0)) {
@@ -904,23 +915,21 @@ static void ETX_EVT_keyPress(uint8_t shift, uint8_t keys) {
 				rtn = GAPRole_SetParameter(GAPROLE_ADVERT_DATA,
 						sizeof(advertData), advertData);
 				if (rtn == SUCCESS)
-					ETX_CBm_appStateChange(APP_STATE_IDLE);
+						ETX_CBm_appStateChange(APP_STATE_IDLE);
 			}
 
 		break;
 
 		case APP_STATE_IDLE:
 			if (keys < KEY_OK) { // number key pressed
-				uint8_t keyNum = 0;
-				for (keyNum = 1; keyNum <= 9; keyNum++)
-					if ((keys << keyNum) & 0x0200 == 1) break;
-				userData = keyNum;
+				userData = keys;
+				uout1("response set to: %d", userData);
 			}
 			if (keys == KEY_OK) {
 				bStatus_t rtn;
 				rtn = ETXProfile_SetParameter(ETXPROFILE_DATA, sizeof(userData), &userData);
 				if (rtn == SUCCESS)
-					ETX_CBm_appStateChange(APP_STATE_ACTIVE);
+						ETX_CBm_appStateChange(APP_STATE_ACTIVE);
 			}
 		break;
 		case APP_STATE_ACTIVE:
@@ -935,22 +944,36 @@ static void ETX_EVT_keyPress(uint8_t shift, uint8_t keys) {
 /** process app state change event **/
 static void ETX_EVT_appStateChange(AppState_t newState) {
 	appState = newState;
+	// uout1("into new state: 0x%02x", newState);
 	switch (newState) {
 		case APP_STATE_INIT:
-			Board_ledFlash(BOARD_RLED, 300);
-		break;
+			destBSID = 0x00;
+			advertData[9] = destBSID;
+			userData = 0x00;
+			ETXProfile_SetParameter(ETXPROFILE_DATA, sizeof(userData), &userData);
 
-		case APP_STATE_IDLE:
-			if (isBatLow) // battery level is low?
-				Board_ledFlash(BOARD_RLED, 1500);
-			else
-				Board_ledOFF(BOARD_RLED);
-			Board_ledLowFlash(BOARD_BLED, 1000);
 			{
 				uint8_t adEnable = FALSE;
 				GAPRole_SetParameter(GAPROLE_ADVERT_ENABLED, sizeof(uint8_t),
 						&adEnable);
 			}
+
+			if (isBatLow) // battery level is low?
+				Board_ledFlash(BOARD_RLED, 1500);
+			else
+				Board_ledOFF(BOARD_RLED);
+			Board_ledOFF(BOARD_BLED);
+		break;
+
+		case APP_STATE_IDLE:
+			{
+				uint8_t adEnable = FALSE;
+				GAPRole_SetParameter(GAPROLE_ADVERT_ENABLED, sizeof(uint8_t),
+						&adEnable);
+			}
+
+			Board_ledLowFlash(BOARD_BLED, 1000);
+
 		break;
 
 		case APP_STATE_ACTIVE:
@@ -959,7 +982,7 @@ static void ETX_EVT_appStateChange(AppState_t newState) {
 				GAPRole_SetParameter(GAPROLE_ADVERT_ENABLED, sizeof(uint8_t),
 						&adEnable);
 			}
-			Board_ledFlash(BOARD_BLED, 300);
+			Board_ledFlash(BOARD_BLED, 100);
 		break;
 
 		default:
@@ -1006,3 +1029,22 @@ static void ETX_DevID_updateScanRsp() {
 	scanRspData[14] = devID[3];
 }
 
+/******************************************************************************
+ * Battery level detect
+ */
+static uint16_t ETX_ADC_batLevelGet() {
+	ADC_Handle adc;
+	ADC_Params params;
+	int_fast16_t res;
+	uint16_t adcValue;
+
+	ADC_Params_init(&params);
+	adc = ADC_open(Board_ADCIN, &params);
+	if (adc == NULL)
+		return 0;
+	res = ADC_convert(adc, &adcValue);
+	if (res == ADC_STATUS_SUCCESS)
+		return adcValue;
+	else
+		return 0;
+}

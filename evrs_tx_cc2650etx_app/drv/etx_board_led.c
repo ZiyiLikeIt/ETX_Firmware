@@ -130,10 +130,16 @@ void Board_ledControl(BoardLedID_t ledID, BoardLedState_t state,
 			Util_restartClock(&ledFlashClk[ledID], period);
 		break;
 
+		case BOARD_LED_STATE_LOWFLASH:
+			PIN_setOutputValue(ledPinHandle, IDPARSER(ledID), 0);
+			Util_restartClock(&ledFlashClk[ledID], period);
+		break;
+
 		default:
 		break;
 	}
 	ledState[ledID] = state;
+	ledPeriod[ledID] = period;
 }
 
 /*
@@ -149,5 +155,5 @@ static void Board_ledFlashTimeoutCB(UArg ledID) {
 		Util_startClock(&ledFlashClk[ledID]);
 	else if (ledState[ledID] == BOARD_LED_STATE_LOWFLASH)
 		Util_restartClock(&ledFlashClk[ledID],
-				(currState == 0)?(100):(ledPeriod[ledID]));
+				(currState == 0)?(50):(ledPeriod[ledID]));
 }

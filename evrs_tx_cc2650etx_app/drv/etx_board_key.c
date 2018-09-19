@@ -98,16 +98,17 @@ Hwi_Struct callbackHwiKeys;
 // PIN configuration structure to set all KEY pins as inputs with pullups enabled
 PIN_Config keyPinsCfg[] =
 {
-	Board_KEY1   	| PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES | PIN_HYSTERESIS,
-	Board_KEY2   	| PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES | PIN_HYSTERESIS,
-	Board_KEY3   	| PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES | PIN_HYSTERESIS,
-	Board_KEY4   	| PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES | PIN_HYSTERESIS,
-	Board_KEY5   	| PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES | PIN_HYSTERESIS,
-	Board_KEY6   	| PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES | PIN_HYSTERESIS,
-	Board_KEY7   	| PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES | PIN_HYSTERESIS,
-	Board_KEY8   	| PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES | PIN_HYSTERESIS,
-	Board_KEY9   	| PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES | PIN_HYSTERESIS,
+	Board_KEY1 	| PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES | PIN_HYSTERESIS,
+	Board_KEY2 	| PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES | PIN_HYSTERESIS,
+	Board_KEY3 	| PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES | PIN_HYSTERESIS,
+	Board_KEY4 	| PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES | PIN_HYSTERESIS,
+	Board_KEY5 	| PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES | PIN_HYSTERESIS,
+	Board_KEY6 	| PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES | PIN_HYSTERESIS,
+	Board_KEY7 	| PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES | PIN_HYSTERESIS,
+	Board_KEY8 	| PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES | PIN_HYSTERESIS,
+	Board_KEY9 	| PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES | PIN_HYSTERESIS,
 	Board_KEY10	| PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES | PIN_HYSTERESIS,
+	Board_KEY11	| PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES | PIN_HYSTERESIS,
 
 	PIN_TERMINATE
 };
@@ -143,6 +144,7 @@ void Board_initKeys(keysPressedCB_t appKeyCB)
     PIN_setConfig(hKeyPins, PIN_BM_IRQ, Board_KEY8  | PIN_IRQ_NEGEDGE);
     PIN_setConfig(hKeyPins, PIN_BM_IRQ, Board_KEY9  | PIN_IRQ_NEGEDGE);
     PIN_setConfig(hKeyPins, PIN_BM_IRQ, Board_KEY10 | PIN_IRQ_NEGEDGE);
+    PIN_setConfig(hKeyPins, PIN_BM_IRQ, Board_KEY11 | PIN_IRQ_NEGEDGE);
 
 #ifdef POWER_SAVING
   //Enable wakeup
@@ -156,6 +158,7 @@ void Board_initKeys(keysPressedCB_t appKeyCB)
     PIN_setConfig(hKeyPins, PINCC26XX_BM_WAKEUP, Board_KEY8  | PINCC26XX_WAKEUP_NEGEDGE);
     PIN_setConfig(hKeyPins, PINCC26XX_BM_WAKEUP, Board_KEY9  | PINCC26XX_WAKEUP_NEGEDGE);
     PIN_setConfig(hKeyPins, PINCC26XX_BM_WAKEUP, Board_KEY10 | PINCC26XX_WAKEUP_NEGEDGE);
+    PIN_setConfig(hKeyPins, PINCC26XX_BM_WAKEUP, Board_KEY11 | PINCC26XX_WAKEUP_NEGEDGE);
 #endif //POWER_SAVING
 
   // Setup keycallback for keys
@@ -180,26 +183,28 @@ static void Board_keyCallback(PIN_Handle hPin, PIN_Id pinId)
 {
     keysPressed = 0;
 
-    if ( PIN_getInputValue(Board_KEY1) == 0 )
-        keysPressed |= KEY1;
-    if ( PIN_getInputValue(Board_KEY2) == 0 )
-        keysPressed |= KEY2;
-    if ( PIN_getInputValue(Board_KEY3) == 0 )
-        keysPressed |= KEY3;
-    if ( PIN_getInputValue(Board_KEY4) == 0 )
-        keysPressed |= KEY4;
-    if ( PIN_getInputValue(Board_KEY5) == 0 )
-        keysPressed |= KEY5;
-    if ( PIN_getInputValue(Board_KEY6) == 0 )
-        keysPressed |= KEY6;
-    if ( PIN_getInputValue(Board_KEY7) == 0 )
-        keysPressed |= KEY7;
-    if ( PIN_getInputValue(Board_KEY8) == 0 )
-    	keysPressed |= KEY8;
     if ( PIN_getInputValue(Board_KEY9) == 0 )
-    	keysPressed |= KEY9;
+        	keysPressed = KEY9;
+    if ( PIN_getInputValue(Board_KEY8) == 0 )
+        	keysPressed = KEY8;
+    if ( PIN_getInputValue(Board_KEY7) == 0 )
+            keysPressed = KEY7;
+    if ( PIN_getInputValue(Board_KEY6) == 0 )
+            keysPressed = KEY6;
+    if ( PIN_getInputValue(Board_KEY5) == 0 )
+            keysPressed = KEY5;
+    if ( PIN_getInputValue(Board_KEY4) == 0 )
+            keysPressed = KEY4;
+    if ( PIN_getInputValue(Board_KEY3) == 0 )
+            keysPressed = KEY3;
+    if ( PIN_getInputValue(Board_KEY2) == 0 )
+            keysPressed = KEY2;
+    if ( PIN_getInputValue(Board_KEY1) == 0 )
+            keysPressed = KEY1;
     if ( PIN_getInputValue(Board_KEY10) == 0 )
-    	keysPressed |= KEY_OK;
+        	keysPressed = KEY_OK;
+    if ( PIN_getInputValue(Board_KEY11) == 0 )
+    		keysPressed = KEY_PWR;
 
     Util_startClock(&keyChangeClock);
 }
