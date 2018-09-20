@@ -196,7 +196,8 @@ static const uint8_t attDeviceName[GAP_DEVICE_NAME_LEN] = "EVRS Transmitter";
 static gattMsgEvent_t *pAttRsp = NULL;
 static uint8_t rspTxRetry = 0;
 
-// device battery low flag
+// battery level and flag
+static uint32_t batLevel = 0;
 static bool isBatLow = false;
 
 // Destiny base station ID
@@ -328,6 +329,7 @@ static void ETX_init(void) {
 	Board_initLEDs();
 	Board_Display_Init();
 	ADC_init();
+	batLevel = ETX_ADC_batLevelGet();
 	Board_ledON(BOARD_RLED);
 
 	// Device ID check
@@ -447,12 +449,17 @@ static void ETX_init(void) {
 
 	HCI_LE_ReadMaxDataLenCmd();
 
-	uout0("ETX Task initialized");
 	{
-		uint32_t batLevel = ETX_ADC_batLevelGet();
-		isBatLow = (batLevel < 2500000) ? 1 : 0;
+		uint32_t batLedLevel = ETX_ADC_batLevelGet();
+		if (batLevel - batLedLevel > 200000) {
+		    uout0("VCC regulator not working, device is shutting down");
+            Board_ledOFF(BOARD_RLED);
+            Board_ledOFF(BOARD_BLED);
+            Power_shutdown(NULL,0);
+		} else
+		    isBatLow = (batLevel < 2500000) ? 1 : 0;
 	}
-
+	uout0("ETX Task initialized");
 }
 
 /*********************************************************************
@@ -1056,7 +1063,6 @@ static uint32_t ETX_ADC_batLevelGet() {
 	if (res == ADC_STATUS_SUCCESS) {
 		ADC_close(adc);
 		uint32_t rtn = ADC_convertRawToMicroVolts(adc, adcValue);
-		uout1("bat level value: %dmV", rtn);
 		return rtn;
 	}
 	else {
