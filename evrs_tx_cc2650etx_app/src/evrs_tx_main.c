@@ -546,22 +546,10 @@ static uint8_t ETX_processStackMsg(ICall_Hdr *pMsg) {
 			safeToDealloc = ETX_processGATTMsg((gattMsgEvent_t *) pMsg);
 		break;
 
-		case HCI_GAP_EVENT_EVENT: {
+		case HCI_GAP_EVENT_EVENT:
 			// Process HCI message
-			switch (pMsg->status) {
-				case HCI_COMMAND_COMPLETE_EVENT_CODE:
-					// Process HCI Command Complete Event
-				break;
-
-				case HCI_BLE_HARDWARE_ERROR_EVENT_CODE: {
-					AssertHandler(HAL_ASSERT_CAUSE_HARDWARE_ERROR, 0);
-				}
-				break;
-
-				default:
-				break;
-			}
-		}
+			if (pMsg->status == HCI_BLE_HARDWARE_ERROR_EVENT_CODE)
+			    AssertHandler(HAL_ASSERT_CAUSE_HARDWARE_ERROR, 0);
 		break;
 
 		default:
