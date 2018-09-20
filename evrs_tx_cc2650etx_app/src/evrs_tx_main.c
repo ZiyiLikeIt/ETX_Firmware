@@ -43,6 +43,7 @@
 #endif //USE_RCOSC
 
 #include "etx_board.h"
+#include <ti/drivers/Power.h>
 #include <ti/drivers/ADC.h>
 #include "etx_board_key.h"
 #include "etx_board_led.h"
@@ -243,7 +244,7 @@ static void ETX_DevId_Refresh(uint8_t IdPrefix, uint8_t* nvBuf);
 static void ETX_DevID_updateScanRsp();
 
 /** Battery Level **/
-static uint16_t ETX_ADC_batLevelGet();
+static uint32_t ETX_ADC_batLevelGet();
 
 /*********************************************************************
  * EXTERN FUNCTIONS
@@ -327,7 +328,7 @@ static void ETX_init(void) {
 	Board_initLEDs();
 	Board_Display_Init();
 	ADC_init();
-	Board_ledFlash(BOARD_RLED, 300);
+	Board_ledON(BOARD_RLED);
 
 	// Device ID check
 	{
@@ -448,9 +449,8 @@ static void ETX_init(void) {
 
 	uout0("ETX Task initialized");
 	{
-		uint16_t batLevel = ETX_ADC_batLevelGet();
-		uout1("battery level: 0x%03x", batLevel);
-		isBatLow = (batLevel < 0x0100) ? 1 : 0;
+		uint32_t batLevel = ETX_ADC_batLevelGet();
+		isBatLow = (batLevel < 2500000) ? 1 : 0;
 	}
 
 }
@@ -901,7 +901,7 @@ static void ETX_EVT_keyPress(uint8_t shift, uint8_t keys) {
 	// all keys should be exclusive
 	// ok and lower number will have higher priority
 
-	// uout1("key pressed: S%d", keys);
+	uout1("key pressed: S%d", keys);
 	switch (appState) {
 		case APP_STATE_INIT:
 			if (keys < KEY_OK) { // number key pressed
@@ -939,12 +939,19 @@ static void ETX_EVT_keyPress(uint8_t shift, uint8_t keys) {
 		break;
 
 	}
+	if (keys == KEY_PWR) {
+		ETX_EVT_appStateChange(APP_STATE_INIT);
+		Board_ledOFF(BOARD_RLED);
+		Board_ledOFF(BOARD_BLED);
+		uout0("device is shutting down");
+		Power_shutdown(NULL,0);
+	}
 }
 
 /** process app state change event **/
 static void ETX_EVT_appStateChange(AppState_t newState) {
 	appState = newState;
-	// uout1("into new state: 0x%02x", newState);
+	uout1("into new state: 0x%02x", newState);
 	switch (newState) {
 		case APP_STATE_INIT:
 			destBSID = 0x00;
@@ -959,9 +966,9 @@ static void ETX_EVT_appStateChange(AppState_t newState) {
 			}
 
 			if (isBatLow) // battery level is low?
-				Board_ledFlash(BOARD_RLED, 1500);
+				Board_ledFlash(BOARD_RLED, 500);
 			else
-				Board_ledOFF(BOARD_RLED);
+				Board_ledLowFlash(BOARD_RLED, 2000);
 			Board_ledOFF(BOARD_BLED);
 		break;
 
@@ -1032,19 +1039,29 @@ static void ETX_DevID_updateScanRsp() {
 /******************************************************************************
  * Battery level detect
  */
-static uint16_t ETX_ADC_batLevelGet() {
+static uint32_t ETX_ADC_batLevelGet() {
 	ADC_Handle adc;
 	ADC_Params params;
 	int_fast16_t res;
 	uint16_t adcValue;
 
 	ADC_Params_init(&params);
-	adc = ADC_open(Board_ADCIN, &params);
-	if (adc == NULL)
-		return 0;
+	adc = ADC_open(Board_ADC, &params);
+	if (adc == NULL) {
+		// ADC_close(adc);
+		uout0("adc open error");
+		return 0x00;
+	}
 	res = ADC_convert(adc, &adcValue);
-	if (res == ADC_STATUS_SUCCESS)
-		return adcValue;
-	else
-		return 0;
+	if (res == ADC_STATUS_SUCCESS) {
+		ADC_close(adc);
+		uint32_t rtn = ADC_convertRawToMicroVolts(adc, adcValue);
+		uout1("bat level value: %dmV", rtn);
+		return rtn;
+	}
+	else {
+		ADC_close(adc);
+		uout0("adc result error");
+		return 0x00;
+	}
 }

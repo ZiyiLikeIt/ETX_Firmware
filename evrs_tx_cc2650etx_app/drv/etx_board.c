@@ -261,7 +261,7 @@ const ADCCC26XX_HWAttrs adcCC26xxHWAttrs[1] = {
         .adcDIO = Board_ADCIN,
         .adcCompBInput = ADC_COMPB_IN_AUXIO6,
         .refSource = ADCCC26XX_FIXED_REFERENCE,
-        .samplingDuration = ADCCC26XX_SAMPLING_DURATION_10P6_US,
+        .samplingDuration = ADCCC26XX_SAMPLING_DURATION_2P7_US,
         .inputScalingEnabled = true,
         .triggerSource = ADCCC26XX_TRIGGER_MANUAL
     }

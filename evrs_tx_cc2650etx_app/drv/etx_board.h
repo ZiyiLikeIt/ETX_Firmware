@@ -61,7 +61,8 @@ extern const PIN_Config BoardGpioInitTable[];
 #define Board_UART_RX      	PIN_UNASSIGNED
 #define Board_UART_TX      	IOID_0
 
-/* ADC Vin */
+/* ADC */
+#define Board_ADC       	0
 #define Board_ADCIN       	IOID_8
 
 #endif /* ETXBOARD_H */
