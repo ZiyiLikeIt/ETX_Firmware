@@ -1,1 +1,10 @@
 /drv/
+/Application/
+/Drivers/
+/ICall/
+/ICallBLE/
+/Middleware/
+/PROFILES/
+/Startup/
+/TOOLS/
+/src/
