@@ -253,18 +253,26 @@ const TRNGCC26XX_Config TRNGCC26XX_config[] = {
 #include <ti/drivers/adc/ADCCC26XX.h>
 
 /* ADC objects */
-ADCCC26XX_Object adcCC26xxObjects[1];
+ADCCC26XX_Object adcCC26xxObjects[2];
 
 
-const ADCCC26XX_HWAttrs adcCC26xxHWAttrs[1] = {
+const ADCCC26XX_HWAttrs adcCC26xxHWAttrs[2] = {
     {
-        .adcDIO = Board_ADCIN,
+        .adcDIO = Board_BAT,
         .adcCompBInput = ADC_COMPB_IN_AUXIO6,
         .refSource = ADCCC26XX_FIXED_REFERENCE,
-        .samplingDuration = ADCCC26XX_SAMPLING_DURATION_2P7_US,
+        .samplingDuration = ADCCC26XX_SAMPLING_DURATION_10P6_US,
         .inputScalingEnabled = true,
         .triggerSource = ADCCC26XX_TRIGGER_MANUAL
-    }
+    },
+	{
+		.adcDIO = PIN_UNASSIGNED,
+		.adcCompBInput = ADC_COMPB_IN_VDDS,
+		.refSource = ADCCC26XX_FIXED_REFERENCE,
+		.samplingDuration = ADCCC26XX_SAMPLING_DURATION_10P6_US,
+		.inputScalingEnabled = true,
+		.triggerSource = ADCCC26XX_TRIGGER_MANUAL
+	}
 };
 
 const ADC_Config ADC_config[] = {
@@ -273,6 +281,11 @@ const ADC_Config ADC_config[] = {
 		.object = &adcCC26xxObjects[0],
 		.hwAttrs = &adcCC26xxHWAttrs[0]
     },
+	{
+		.fxnTablePtr = &ADCCC26XX_fxnTable,
+		.object = &adcCC26xxObjects[1],
+		.hwAttrs = &adcCC26xxHWAttrs[1]
+	},
     {NULL, NULL, NULL}
 };
 

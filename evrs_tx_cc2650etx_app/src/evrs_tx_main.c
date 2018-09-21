@@ -196,7 +196,7 @@ static const uint8_t attDeviceName[GAP_DEVICE_NAME_LEN] = "EVRS Transmitter";
 static gattMsgEvent_t *pAttRsp = NULL;
 static uint8_t rspTxRetry = 0;
 
-// device battery low flag
+// battery level flag
 static bool isBatLow = false;
 
 // Destiny base station ID
@@ -215,14 +215,14 @@ static uint8_t devID[ETX_DEVID_LEN] = { 0 };
 static void ETX_init(void);
 static void ETX_taskFxn(UArg a0, UArg a1);
 
-/** Internal message processor **/
+/** Internal message gen and routing **/
+static void ETX_enqueueMsg(uint8_t event, uint8_t state);
 static uint8_t ETX_processStackMsg(ICall_Hdr *pMsg);
-static uint8_t ETX_processGATTMsg(gattMsgEvent_t *pMsg);
 static void ETX_processAppMsg(SbpEvt_t *pMsg);
 
 static void ETX_sendAttRsp(void);
 static void ETX_freeAttRsp(uint8_t status);
-static void ETX_enqueueMsg(uint8_t event, uint8_t state);
+
 
 /** Callbacks **/
 static void ETX_CB_GAPRoleStateChange(gaprole_States_t newState);
@@ -232,6 +232,7 @@ void ETX_CB_keyPress(uint8_t keys);
 static void ETX_CBm_appStateChange(AppState_t newState);
 
 /** Event process service **/
+static uint8_t ETX_EVT_GATTMsgReceived(gattMsgEvent_t *pMsg);
 static void ETX_EVT_GAPRoleStateChange(gaprole_States_t newState);
 static void ETX_EVT_charValueChange(uint8_t paramID);
 static void ETX_EVT_charValueEnquire(uint8_t paramID);
@@ -244,7 +245,7 @@ static void ETX_DevId_Refresh(uint8_t IdPrefix, uint8_t* nvBuf);
 static void ETX_DevID_updateScanRsp();
 
 /** Battery Level **/
-static uint32_t ETX_ADC_batLevelGet();
+static uint32_t ETX_ADC_valueGet(uint8_t BOARD_ADC);
 
 /*********************************************************************
  * EXTERN FUNCTIONS
@@ -273,7 +274,7 @@ static ETXProfileCBs_t ETX_ETXProfileCBs = {
 		};
 
 /*********************************************************************
- * PUBLIC FUNCTIONS
+ * @TAG Task functions
  */
 
 /*********************************************************************
@@ -328,7 +329,23 @@ static void ETX_init(void) {
 	Board_initLEDs();
 	Board_Display_Init();
 	ADC_init();
+
 	Board_ledON(BOARD_RLED);
+	Board_ledON(BOARD_BLED);
+
+	{
+		Task_sleep(500*1000 / Clock_tickPeriod);
+		uint32_t vccLevel = ETX_ADC_valueGet(Board_ADCVCC);
+		if (vccLevel < 3000*1000) {
+			uout1("VCC Level: %dmV", vccLevel/1000);
+			uout0("VCC regulator not working, device is shutting down");
+			Board_ledOFF(BOARD_RLED);
+			Board_ledOFF(BOARD_BLED);
+			Power_shutdown(NULL, 0);
+		}
+	}
+
+
 
 	// Device ID check
 	{
@@ -447,12 +464,13 @@ static void ETX_init(void) {
 
 	HCI_LE_ReadMaxDataLenCmd();
 
-	uout0("ETX Task initialized");
 	{
-		uint32_t batLevel = ETX_ADC_batLevelGet();
-		isBatLow = (batLevel < 2500000) ? 1 : 0;
+		uint32_t batLevel = ETX_ADC_valueGet(Board_ADCIN);
+		uout1("batLevel: %dmV", batLevel/1000);
+		isBatLow = (batLevel < 2500*1000) ? 1 : 0;
 	}
 
+	uout0("ETX Task initialized");
 }
 
 /*********************************************************************
@@ -521,40 +539,66 @@ static void ETX_taskFxn(UArg a0, UArg a1) {
 	}
 }
 
-/*********************************************************************
- * @fn      ETX_processStackMsg
- *
- * @brief   Process an incoming stack message.
- *
- * @param   pMsg - message to process
- *
- * @return  TRUE if safe to deallocate incoming message, FALSE otherwise.
+
+/*****************************************************************************
+ * @TAG Message gen and routing
  */
+/** Creates a message and puts the message in RTOS queue **/
+static void ETX_enqueueMsg(uint8_t event, uint8_t state) {
+	SbpEvt_t *pMsg;
+
+	// Create dynamic pointer to message.
+	if ((pMsg = ICall_malloc(sizeof(SbpEvt_t)))) {
+		pMsg->hdr.event = event;
+		pMsg->hdr.state = state;
+
+		// Enqueue the message.
+		Util_enqueueMsg(appMsgQueue, sem, (uint8*) pMsg);
+	}
+}
+
+/** Process an incoming callback from a profile **/
+static void ETX_processAppMsg(SbpEvt_t *pMsg) {
+	switch (pMsg->hdr.event) {
+		case ETX_GAP_STATE_CHG_EVT:
+			ETX_EVT_GAPRoleStateChange((gaprole_States_t) pMsg->hdr.state);
+		break;
+
+		case ETX_APP_STATE_CHG_EVT:
+			ETX_EVT_appStateChange((AppState_t) pMsg->hdr.state);
+		break;
+
+		case ETX_CHAR_CHANGE_EVT:
+			ETX_EVT_charValueChange(pMsg->hdr.state);
+		break;
+
+		case ETX_CHAR_ENQUIRE_EVT:
+			ETX_EVT_charValueEnquire(pMsg->hdr.state);
+		break;
+
+		case ETX_KEY_PRESS_EVT:
+			ETX_EVT_keyPress(0, pMsg->hdr.state);
+
+		default:
+			// Do nothing.
+		break;
+	}
+}
+
+/** process incoming stack message **/
 static uint8_t ETX_processStackMsg(ICall_Hdr *pMsg) {
 	uint8_t safeToDealloc = TRUE;
 
 	switch (pMsg->event) {
 		case GATT_MSG_EVENT:
 			// Process GATT message
-			safeToDealloc = ETX_processGATTMsg((gattMsgEvent_t *) pMsg);
+			safeToDealloc = ETX_EVT_GATTMsgReceived((gattMsgEvent_t *) pMsg);
 		break;
 
-		case HCI_GAP_EVENT_EVENT: {
+		case HCI_GAP_EVENT_EVENT:
 			// Process HCI message
-			switch (pMsg->status) {
-				case HCI_COMMAND_COMPLETE_EVENT_CODE:
-					// Process HCI Command Complete Event
-				break;
-
-				case HCI_BLE_HARDWARE_ERROR_EVENT_CODE: {
-					AssertHandler(HAL_ASSERT_CAUSE_HARDWARE_ERROR, 0);
-				}
-				break;
-
-				default:
-				break;
-			}
-		}
+			if (pMsg->status == HCI_BLE_HARDWARE_ERROR_EVENT_CODE)
+			    AssertHandler(HAL_ASSERT_CAUSE_HARDWARE_ERROR, 0);
 		break;
 
 		default:
@@ -563,48 +607,6 @@ static uint8_t ETX_processStackMsg(ICall_Hdr *pMsg) {
 	}
 
 	return (safeToDealloc);
-}
-
-/*********************************************************************
- * @fn      ETX_processGATTMsg
- *
- * @brief   Process GATT messages and events.
- *
- * @return  TRUE if safe to deallocate incoming message, FALSE otherwise.
- */
-static uint8_t ETX_processGATTMsg(gattMsgEvent_t *pMsg) {
-	// See if GATT server was unable to transmit an ATT response
-	if (pMsg->hdr.status == blePending) {
-		// No HCI buffer was available. Let's try to retransmit the response
-		// on the next connection event.
-		if (HCI_EXT_ConnEventNoticeCmd(pMsg->connHandle, selfEntity,
-				ETX_CONN_EVT_END_EVT) == SUCCESS) {
-			// First free any pending response
-			ETX_freeAttRsp(FAILURE);
-
-			// Hold on to the response message for retransmission
-			pAttRsp = pMsg;
-
-			// Don't free the response message yet
-			return (FALSE);
-		}
-	} else if (pMsg->method == ATT_FLOW_CTRL_VIOLATED_EVENT) {
-		// ATT request-response or indication-confirmation flow control is
-		// violated. All subsequent ATT requests or indications will be dropped.
-		// The app is informed in case it wants to drop the connection.
-
-		// Display the opcode of the message that caused the violation.
-		uout1("FC Violated: %d", pMsg->msg.flowCtrlEvt.opcode);
-	} else if (pMsg->method == ATT_MTU_UPDATED_EVENT) {
-		// MTU size updated
-		uout1("MTU Size: $d", pMsg->msg.mtuEvt.MTU);
-	}
-
-	// Free message payload. Needed only for ATT Protocol messages
-	GATT_bm_free(&pMsg->msg, pMsg->method);
-
-	// It's safe to free the incoming message
-	return (TRUE);
 }
 
 /*********************************************************************
@@ -672,67 +674,9 @@ static void ETX_freeAttRsp(uint8_t status) {
 	}
 }
 
-/*********************************************************************
- * @fn      ETX_processAppMsg
- *
- * @brief   Process an incoming callback from a profile.
- *
- * @param   pMsg - message to process
- *
- * @return  None.
- */
-static void ETX_processAppMsg(SbpEvt_t *pMsg) {
-	switch (pMsg->hdr.event) {
-		case ETX_GAP_STATE_CHG_EVT:
-			ETX_EVT_GAPRoleStateChange((gaprole_States_t) pMsg->hdr.state);
-		break;
-
-		case ETX_APP_STATE_CHG_EVT:
-			ETX_EVT_appStateChange((AppState_t) pMsg->hdr.state);
-		break;
-
-		case ETX_CHAR_CHANGE_EVT:
-			ETX_EVT_charValueChange(pMsg->hdr.state);
-		break;
-
-		case ETX_CHAR_ENQUIRE_EVT:
-			ETX_EVT_charValueEnquire(pMsg->hdr.state);
-		break;
-
-		case ETX_KEY_PRESS_EVT:
-			ETX_EVT_keyPress(0, pMsg->hdr.state);
-
-		default:
-			// Do nothing.
-		break;
-	}
-}
 
 /*********************************************************************
- * @fn      ETX_enqueueMsg
- *
- * @brief   Creates a message and puts the message in RTOS queue.
- *
- * @param   event - message event.
- * @param   state - message state.
- *
- * @return  None.
- */
-static void ETX_enqueueMsg(uint8_t event, uint8_t state) {
-	SbpEvt_t *pMsg;
-
-	// Create dynamic pointer to message.
-	if ((pMsg = ICall_malloc(sizeof(SbpEvt_t)))) {
-		pMsg->hdr.event = event;
-		pMsg->hdr.state = state;
-
-		// Enqueue the message.
-		Util_enqueueMsg(appMsgQueue, sem, (uint8*) pMsg);
-	}
-}
-
-/*********************************************************************
- * Callback functions
+ * @TAG Callback functions
  */
 
 /** GAP Role state change callback **/
@@ -760,8 +704,45 @@ static void ETX_CBm_appStateChange(AppState_t newState) {
 }
 
 /*********************************************************************
- * Event process functions
+ * @TAG Event process functions
  */
+/**  Process GATT messages and events **/
+// @return  TRUE if safe to deallocate incoming message, FALSE otherwise.
+static uint8_t ETX_EVT_GATTMsgReceived(gattMsgEvent_t *pMsg) {
+	// See if GATT server was unable to transmit an ATT response
+	if (pMsg->hdr.status == blePending) {
+		// No HCI buffer was available. Let's try to retransmit the response
+		// on the next connection event.
+		if (HCI_EXT_ConnEventNoticeCmd(pMsg->connHandle, selfEntity,
+				ETX_CONN_EVT_END_EVT) == SUCCESS) {
+			// First free any pending response
+			ETX_freeAttRsp(FAILURE);
+
+			// Hold on to the response message for retransmission
+			pAttRsp = pMsg;
+
+			// Don't free the response message yet
+			return (FALSE);
+		}
+	} else if (pMsg->method == ATT_FLOW_CTRL_VIOLATED_EVENT) {
+		// ATT request-response or indication-confirmation flow control is
+		// violated. All subsequent ATT requests or indications will be dropped.
+		// The app is informed in case it wants to drop the connection.
+
+		// Display the opcode of the message that caused the violation.
+		uout1("FC Violated: %d", pMsg->msg.flowCtrlEvt.opcode);
+	} else if (pMsg->method == ATT_MTU_UPDATED_EVENT) {
+		// MTU size updated
+		uout1("MTU Size: $d", pMsg->msg.mtuEvt.MTU);
+	}
+
+	// Free message payload. Needed only for ATT Protocol messages
+	GATT_bm_free(&pMsg->msg, pMsg->method);
+
+	// It's safe to free the incoming message
+	return (TRUE);
+}
+
 /** GAP Role state changed **/
 static void ETX_EVT_GAPRoleStateChange(gaprole_States_t newState) {
 
@@ -997,8 +978,8 @@ static void ETX_EVT_appStateChange(AppState_t newState) {
 	}
 }
 
-/*
- * Device ID Functions
+/*****************************************************************************
+ * @TAG Device ID Functions
  */
 /** find the devID **/
 static void ETX_DevId_Find(uint8_t* nvBuf) {
@@ -1037,31 +1018,32 @@ static void ETX_DevID_updateScanRsp() {
 }
 
 /******************************************************************************
- * Battery level detect
+ * ADC Control
  */
-static uint32_t ETX_ADC_batLevelGet() {
+/** battery level detect **/
+static uint32_t ETX_ADC_valueGet(uint8_t BOARD_ADC) {
 	ADC_Handle adc;
 	ADC_Params params;
 	int_fast16_t res;
 	uint16_t adcValue;
 
 	ADC_Params_init(&params);
-	adc = ADC_open(Board_ADC, &params);
+	adc = ADC_open(BOARD_ADC, &params);
 	if (adc == NULL) {
 		// ADC_close(adc);
-		uout0("adc open error");
-		return 0x00;
+		uout1("adc%d open error", BOARD_ADC);
+		return 0;
 	}
 	res = ADC_convert(adc, &adcValue);
 	if (res == ADC_STATUS_SUCCESS) {
 		ADC_close(adc);
 		uint32_t rtn = ADC_convertRawToMicroVolts(adc, adcValue);
-		uout1("bat level value: %dmV", rtn);
 		return rtn;
 	}
 	else {
 		ADC_close(adc);
-		uout0("adc result error");
-		return 0x00;
+		uout1("adc%d result error", BOARD_ADC);
+		return 0;
 	}
 }
+
