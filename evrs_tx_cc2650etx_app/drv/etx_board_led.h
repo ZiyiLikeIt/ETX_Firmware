@@ -35,7 +35,8 @@ typedef enum BoardLedID_t {
 typedef enum BoardLedState_t {
     	BOARD_LED_STATE_OFF,
 		BOARD_LED_STATE_ON,
-		BOARD_LED_STATE_TOGGLE,
+		BOARD_LED_STATE_LOW,
+		BOARD_LED_STATE_HIGH,
 		BOARD_LED_STATE_FLASH,
 		BOARD_LED_STATE_LOWFLASH
 } BoardLedState_t;
@@ -57,8 +58,11 @@ void Board_ledControl(BoardLedID_t ledID, BoardLedState_t state, uint32_t period
 #define Board_ledON(ledID) \
 	Board_ledControl((BoardLedID_t) ledID, BOARD_LED_STATE_ON, 0)
 
-#define Board_ledToggle(ledID) \
-	Board_ledControl((BoardLedID_t) ledID, BOARD_LED_STATE_TOGGLE, 0)
+#define Board_ledLOW(ledID) \
+	Board_ledControl((BoardLedID_t) ledID, BOARD_LED_STATE_LOW, 0)
+
+#define Board_ledHIGH(ledID) \
+	Board_ledControl((BoardLedID_t) ledID, BOARD_LED_STATE_HIGH, 0)
 
 #define Board_ledFlash(ledID, prd) \
 	Board_ledControl((BoardLedID_t) ledID, BOARD_LED_STATE_FLASH, (uint32_t) prd)
