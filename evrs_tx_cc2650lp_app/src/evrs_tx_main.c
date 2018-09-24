@@ -97,11 +97,11 @@
 
 // Minimum connection interval (units of 1.25ms, 80=100ms) if automatic
 // parameter update request is enabled
-#define DEFAULT_DESIRED_MIN_CONN_INTERVAL     16
+#define DEFAULT_DESIRED_MIN_CONN_INTERVAL     32
 
 // Maximum connection interval (units of 1.25ms, 800=1000ms) if automatic
 // parameter update request is enabled
-#define DEFAULT_DESIRED_MAX_CONN_INTERVAL     400
+#define DEFAULT_DESIRED_MAX_CONN_INTERVAL     80
 
 // Slave latency to use if automatic parameter update request is enabled
 #define DEFAULT_DESIRED_SLAVE_LATENCY         0
@@ -206,7 +206,7 @@ static uint8_t advertData[] = {
 		LO_UINT16(ETXPROFILE_SERV_UUID), HI_UINT16(ETXPROFILE_SERV_UUID),
 
 		0x02,
-		ETX_ADTYPE_DEST, 0x00 };
+		ETX_ADTYPE_DEST, 0x02 };
 
 // GAP - SCAN RSP data (max size = 31 bytes)
 static uint8_t scanRspData[15] = {
@@ -229,7 +229,7 @@ static uint8_t scanRspData[15] = {
 
 		// Device ID rsp
 		0x05,
-		ETX_ADTYPE_DEVID, 0x00, 0x00, 0x00, 0x00 };
+		ETX_ADTYPE_DEVID, 0x95, 0x95, 0x95, 0x95 };
 
 // GAP GATT Attributes
 static const uint8_t attDeviceName[GAP_DEVICE_NAME_LEN] = "EVRS Transmitter";
@@ -258,8 +258,6 @@ static void ETX_processAppMsg(EtxEvt_t *pMsg);
 static void ETX_processStateChangeEvt(gaprole_States_t newState);
 static void ETX_processCharValueChangeEvt(uint8_t paramID);
 static void ETX_processCharValueEnquireEvt(uint8_t paramID);
-//static void ETX_performPeriodicTask(void);
-//static void ETX_clockHandler(UArg arg);
 
 static void ETX_sendAttRsp(void);
 static void ETX_freeAttRsp(uint8_t status);
@@ -270,14 +268,8 @@ static void ETX_charValueEnquireCB(uint8_t paramID);
 
 static void ETX_enqueueMsg(uint8_t event, uint8_t state);
 
-void ETX_keyChangeHandler(uint8_t keys);
-static void ETX_handleKeys(uint8_t shift, uint8_t keys);
-
-//device id
-static void ETX_DevId_Find(uint8_t* nvBuf);
-static void ETX_DevId_Refresh(uint8_t IdPrefix, uint8_t* nvBuf);
-static void ETX_ScanRsp_UpdateDeviceID();
-static void ETX_Advert_UpdateDestinyBS();
+//void ETX_keyChangeHandler(uint8_t keys);
+//static void ETX_handleKeys(uint8_t shift, uint8_t keys);
 
 /*********************************************************************
  * EXTERN FUNCTIONS
@@ -289,17 +281,19 @@ extern void AssertHandler(uint8 assertCause, uint8 assertSubcause);
  */
 
 // GAP Role Callbacks
-static gapRolesCBs_t ETX_gapRoleCBs = { ETX_stateChangeCB // Profile State Change Callbacks
+static gapRolesCBs_t ETX_gapRoleCBs = {
+		ETX_stateChangeCB // Profile State Change Callbacks
 		};
 
 // GAP Bond Manager Callbacks
 static gapBondCBs_t ETX_BondMgrCBs = {
-NULL, // Passcode callback (not used by application)
+		NULL, // Passcode callback (not used by application)
 		NULL  // Pairing / Bonding state Callback (not used by application)
 		};
 
 // Simple GATT Profile Callbacks
-static ETXProfileCBs_t ETX_ProfileCBs = { ETX_charValueChangeCB, // Characteristic value change callback
+static ETXProfileCBs_t ETX_ProfileCBs = {
+		ETX_charValueChangeCB, // Characteristic value change callback
 		ETX_charValueEnquireCB // char enquired callback
 		};
 
@@ -355,18 +349,9 @@ static void ETX_init(void) {
 	// Create an RTOS queue for message from profile to be sent to app.
 	appMsgQueue = Util_constructQueue(&appMsg);
 
-	Board_initKeys(ETX_keyChangeHandler);
+	//Board_initKeys(ETX_keyChangeHandler);
 	Board_initLEDs();
 	Board_Display_Init();
-	Board_initADC();
-
-	// Device ID check
-	{
-		ETX_DevId_Find(devID);
-		if (devID[3] != ETX_DEVID_PREFIX) // no valid device id found
-			ETX_DevId_Refresh(ETX_DEVID_PREFIX, devID);
-		ETX_ScanRsp_UpdateDeviceID();
-	}
 
 	// Setup the GAP
 	GAP_SetParamValue(TGAP_CONN_PAUSE_PERIPHERAL, CONN_PAUSE_PERIPHERAL);
@@ -476,28 +461,7 @@ static void ETX_init(void) {
 	GATT_RegisterForMsgs(selfEntity);
 
 	HCI_LE_ReadMaxDataLenCmd();
-	{
-	    ADC_Handle   adc;
-	    ADC_Params   params;
-	    int_fast16_t res;
-	    uint16_t adcValue;
 
-	    ADC_Params_init(&params);
-	    adc = ADC_open(Board_ADC1, &params);
-
-	    if (adc == NULL) {
-	    	uout0("ADC init error");
-	    }
-	    res = ADC_convert(adc, &adcValue);
-	    if (res == ADC_STATUS_SUCCESS) {
-	        uout1("ADC channel 0 convert result: 0x%x", adcValue);
-	    }
-	    else {
-	        uout0("ADC channel 0 convert failed");
-	    }
-
-	    ADC_close(adc);
-	}
 	uout0("EVRS TX initialized");
 	Board_ledControl(BOARD_LED_ID_G, BOARD_LED_STATE_FLASH, 300);
 	//Board_ledControl(BOARD_LED_ID_R, BOARD_LED_STATE_ON, 0);
@@ -751,7 +715,7 @@ static void ETX_processAppMsg(EtxEvt_t *pMsg) {
 		break;
 
 		case ETX_KEY_CHANGE_EVT:
-			ETX_handleKeys(0, pMsg->hdr.state);
+			//ETX_handleKeys(0, pMsg->hdr.state);
 
 		default:
 			// Do nothing.
@@ -788,24 +752,15 @@ static void ETX_processStateChangeEvt(gaprole_States_t newState) {
 
 	switch (newState) {
 		case GAPROLE_STARTED: {
-			uint8_t ownAddress[B_ADDR_LEN];
 			uint8_t systemId[DEVINFO_SYSTEM_ID_LEN];
-
-			GAPRole_GetParameter(GAPROLE_BD_ADDR, ownAddress);
-
-			// use 6 bytes of device address for 8 bytes of system ID value
-			systemId[0] = ownAddress[0];
-			systemId[1] = ownAddress[1];
-			systemId[2] = ownAddress[2];
-
-			// set middle bytes to zero
+			systemId[0] = 0x45;
+			systemId[1] = 0x54;
+			systemId[2] = 0x88;
 			systemId[4] = 0x00;
-			systemId[3] = 0x00;
-
-			// shift three bytes up
-			systemId[7] = ownAddress[5];
-			systemId[6] = ownAddress[4];
-			systemId[5] = ownAddress[3];
+			systemId[3] = 0x95;
+			systemId[7] = 0x95;
+			systemId[6] = 0x95;
+			systemId[5] = 0x95;
 
 			DevInfo_SetParameter(DEVINFO_SYSTEM_ID, DEVINFO_SYSTEM_ID_LEN,
 					systemId);
@@ -813,7 +768,6 @@ static void ETX_processStateChangeEvt(gaprole_States_t newState) {
 			appState = APP_STATE_IDLE;
 
 			// Display device address
-			uout0(Util_convertBdAddr2Str(ownAddress));
 			uout0("Initialized");
 			Board_ledControl(BOARD_LED_ID_R, BOARD_LED_STATE_OFF, 0);
 
@@ -1010,7 +964,7 @@ static void ETX_processCharValueEnquireEvt(uint8_t paramID) {
 			ETXProfile_GetParameter(ETXPROFILE_DATA, &newValue);
 			uout1("User Data Submitted: 0x%02x", (uint8_t )newValue);
 
-			newValue = 0;
+			newValue ++;
 			ETXProfile_SetParameter(ETXPROFILE_DATA, sizeof(newValue),
 					&newValue);
 		break;
@@ -1044,109 +998,109 @@ static void ETX_enqueueMsg(uint8_t event, uint8_t state) {
 	}
 }
 
-/*********************************************************************
- * @fn      ETX_keyChangeHandler
- *
- * @brief   Key event handler function
- *
- * @param   a0 - ignored
- *
- * @return  none
- */
-void ETX_keyChangeHandler(uint8_t keys) {
-	ETX_enqueueMsg(ETX_KEY_CHANGE_EVT, keys);
-}
+///*********************************************************************
+// * @fn      ETX_keyChangeHandler
+// *
+// * @brief   Key event handler function
+// *
+// * @param   a0 - ignored
+// *
+// * @return  none
+// */
+//void ETX_keyChangeHandler(uint8_t keys) {
+//	ETX_enqueueMsg(ETX_KEY_CHANGE_EVT, keys);
+//}
+//
+///*********************************************************************
+// * @fn      ETX_handleKeys
+// *
+// * @brief   Handles all key events for this device.
+// *
+// * @param   shift - true if in shift/alt.
+// * @param   keys - bit field for key events. Valid entries:
+// *                 HAL_KEY_SW_2
+// *                 HAL_KEY_SW_1
+// *
+// * @return  none
+// */
+//static void ETX_handleKeys(uint8_t shift, uint8_t keys) {
+//	//uout0("handleKey() called");
+//	uint8_t advertEnable = FALSE;
+//	switch (appState) {
+//		case APP_STATE_INIT:
+//		break;
+//
+//		case APP_STATE_IDLE:
+//			if (keys & KEY_RIGHT) {
+//				ETX_Advert_UpdateDestinyBS();
+//				bStatus_t rtn = 0;
+//				rtn = GAPRole_SetParameter(GAPROLE_ADVERT_DATA,
+//						sizeof(advertData), advertData);
+//				if (rtn == SUCCESS)
+//				uout1("BS set to 0x%02x", destBsID);
+//				appState = APP_STATE_ADVERT;
+//			}
+//		break;
+//		case APP_STATE_ADVERT:
+//			if (keys & KEY_LEFT) {
+//				advertEnable = FALSE;
+//				GAPRole_SetParameter(GAPROLE_ADVERT_ENABLED, sizeof(uint8_t),
+//						&advertEnable);
+//				appState = APP_STATE_IDLE;
+//			}
+//			if (keys & KEY_RIGHT) {
+//				uint32 newValue = 0;
+//				ETXProfile_GetParameter(ETXPROFILE_DATA, &newValue);
+//				newValue += 1;
+//				ETXProfile_SetParameter(ETXPROFILE_DATA, sizeof(uint32),
+//						&newValue);
+//				appState = APP_STATE_IDLE;
+//			}
+//		break;
+//		default:
+//		break;
+//
+//	}
+//}
 
-/*********************************************************************
- * @fn      ETX_handleKeys
- *
- * @brief   Handles all key events for this device.
- *
- * @param   shift - true if in shift/alt.
- * @param   keys - bit field for key events. Valid entries:
- *                 HAL_KEY_SW_2
- *                 HAL_KEY_SW_1
- *
- * @return  none
- */
-static void ETX_handleKeys(uint8_t shift, uint8_t keys) {
-	//uout0("handleKey() called");
-	uint8_t advertEnable = FALSE;
-	switch (appState) {
-		case APP_STATE_INIT:
-		break;
-
-		case APP_STATE_IDLE:
-			if (keys & KEY_RIGHT) {
-				ETX_Advert_UpdateDestinyBS();
-				bStatus_t rtn = 0;
-				rtn = GAPRole_SetParameter(GAPROLE_ADVERT_DATA,
-						sizeof(advertData), advertData);
-				if (rtn == SUCCESS)
-				uout1("BS set to 0x%02x", destBsID);
-				appState = APP_STATE_ADVERT;
-			}
-		break;
-		case APP_STATE_ADVERT:
-			if (keys & KEY_LEFT) {
-				advertEnable = FALSE;
-				GAPRole_SetParameter(GAPROLE_ADVERT_ENABLED, sizeof(uint8_t),
-						&advertEnable);
-				appState = APP_STATE_IDLE;
-			}
-			if (keys & KEY_RIGHT) {
-				uint32 newValue = 0;
-				ETXProfile_GetParameter(ETXPROFILE_DATA, &newValue);
-				newValue += 1;
-				ETXProfile_SetParameter(ETXPROFILE_DATA, sizeof(uint32),
-						&newValue);
-				appState = APP_STATE_IDLE;
-			}
-		break;
-		default:
-		break;
-
-	}
-}
-
-static void ETX_DevId_Find(uint8_t* nvBuf) {
-	uint8_t rtn = osal_snv_read(ETX_DEVID_NV_ID, ETX_DEVID_LEN,
-			(uint8 *) nvBuf);
-	if (rtn == SUCCESS)
-		uout1("Device ID found: 0x%08x",
-				BUILD_UINT32(nvBuf[0], nvBuf[1], nvBuf[2], nvBuf[3]));
-	return;
-}
-
-static void ETX_DevId_Refresh(uint8_t IdPrefix, uint8_t* nvBuf) {
-	uint32_t rnd = Util_GetTRNG() % 0xFFFFFF;
-	nvBuf[0] = rnd % 0xFF;
-	nvBuf[1] = (rnd >> 8) % 0xFF;
-	nvBuf[2] = (rnd >> 16) % 0xFF;
-	nvBuf[3] = IdPrefix;
-	uint8_t rtn = osal_snv_write(ETX_DEVID_NV_ID, ETX_DEVID_LEN,
-			(uint8 *) nvBuf);
-	if (rtn == SUCCESS) {
-		rtn = osal_snv_read(ETX_DEVID_NV_ID, ETX_DEVID_LEN, (uint8 *) nvBuf);
-		if (rtn == SUCCESS)
-			uout1("Device ID refreshed: 0x%08x",
-					BUILD_UINT32(nvBuf[0], nvBuf[1], nvBuf[2], nvBuf[3]));
-	}
-	return;
-}
-
-static void ETX_ScanRsp_UpdateDeviceID() {
-
-	scanRspData[11] = devID[0];
-	scanRspData[12] = devID[1];
-	scanRspData[13] = devID[2];
-	scanRspData[14] = devID[3];
-}
-
-static void ETX_Advert_UpdateDestinyBS() {
-	destBsID = 0x02;
-	advertData[9] = destBsID;
-}
+//static void ETX_DevId_Find(uint8_t* nvBuf) {
+//	uint8_t rtn = osal_snv_read(ETX_DEVID_NV_ID, ETX_DEVID_LEN,
+//			(uint8 *) nvBuf);
+//	if (rtn == SUCCESS)
+//		uout1("Device ID found: 0x%08x",
+//				BUILD_UINT32(nvBuf[0], nvBuf[1], nvBuf[2], nvBuf[3]));
+//	return;
+//}
+//
+//static void ETX_DevId_Refresh(uint8_t IdPrefix, uint8_t* nvBuf) {
+//	uint32_t rnd = Util_GetTRNG() % 0xFFFFFF;
+//	nvBuf[0] = rnd % 0xFF;
+//	nvBuf[1] = (rnd >> 8) % 0xFF;
+//	nvBuf[2] = (rnd >> 16) % 0xFF;
+//	nvBuf[3] = IdPrefix;
+//	uint8_t rtn = osal_snv_write(ETX_DEVID_NV_ID, ETX_DEVID_LEN,
+//			(uint8 *) nvBuf);
+//	if (rtn == SUCCESS) {
+//		rtn = osal_snv_read(ETX_DEVID_NV_ID, ETX_DEVID_LEN, (uint8 *) nvBuf);
+//		if (rtn == SUCCESS)
+//			uout1("Device ID refreshed: 0x%08x",
+//					BUILD_UINT32(nvBuf[0], nvBuf[1], nvBuf[2], nvBuf[3]));
+//	}
+//	return;
+//}
+//
+//static void ETX_ScanRsp_UpdateDeviceID() {
+//
+//	scanRspData[11] = devID[0];
+//	scanRspData[12] = devID[1];
+//	scanRspData[13] = devID[2];
+//	scanRspData[14] = devID[3];
+//}
+//
+//static void ETX_Advert_UpdateDestinyBS() {
+//	destBsID = 0x02;
+//	advertData[9] = destBsID;
+//}
 
 /*********************************************************************
  *********************************************************************/
