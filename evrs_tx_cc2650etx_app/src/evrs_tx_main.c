@@ -91,8 +91,9 @@
 #define ETX_TASK_STACK_SIZE                   1024
 #endif
 
-#define ETX_ADTYPE_DEST				0xAF
-#define ETX_ADTYPE_DEVID			0xAE
+#define ETX_ADMSG_DEST			0xAC
+#define ETX_ADMSG_DEVID			0xAA
+#define ETX_ADMSG_DATA			0xA5
 
 // Application state
 typedef enum AppState_t {
@@ -152,26 +153,33 @@ static AppState_t appState = APP_STATE_INIT;
 
 // GAP - Advertisement data (max size = 31 bytes, though this is
 // best kept short to conserve power while advertisting)
-static uint8_t advertData[] = {
+static uint8_t advertData[12] = {
 // Flags; this sets the device to use limited discoverable
 // mode (advertises for 30 seconds at a time) instead of general
 // discoverable mode (advertises indefinitely)
-		0x02,// length of this data
-		GAP_ADTYPE_FLAGS,
-		DEFAULT_DISCOVERABLE_MODE | GAP_ADTYPE_FLAGS_BREDR_NOT_SUPPORTED,
-
-		// service UUID, to notify central devices what services are included
-		// in this peripheral
-		0x03,// length of this data
-		GAP_ADTYPE_16BIT_MORE,      // some of the UUID's, but not all
-		LO_UINT16(ETXPROFILE_SERV_UUID), HI_UINT16(ETXPROFILE_SERV_UUID),
+//		0x02,// length of this data
+//		GAP_ADTYPE_FLAGS,
+//		DEFAULT_DISCOVERABLE_MODE | GAP_ADTYPE_FLAGS_BREDR_NOT_SUPPORTED,
+//
+//		// service UUID, to notify central devices what services are included
+//		// in this peripheral
+//		0x03,// length of this data
+//		GAP_ADTYPE_16BIT_MORE,      // some of the UUID's, but not all
+//		LO_UINT16(ETXPROFILE_SERV_UUID), HI_UINT16(ETXPROFILE_SERV_UUID),
 
 		0x02,
-		ETX_ADTYPE_DEST, 0x00
+		ETX_ADMSG_DEST, 0x00,
+
+		// Device ID rsp
+		0x05,
+		ETX_ADMSG_DEVID, 0x00, 0x00, 0x00, 0x00,
+
+		0x02,
+		ETX_ADMSG_DATA, 0x00
 };
 
 // GAP - SCAN RSP data (max size = 31 bytes)
-static uint8_t scanRspData[15] = {
+static uint8_t scanRspData[9] = {
 // connection interval range
 		0x05,// length of this data
 		GAP_ADTYPE_SLAVE_CONN_INTERVAL_RANGE, LO_UINT16(
@@ -182,11 +190,8 @@ static uint8_t scanRspData[15] = {
 
 		// Tx power level
 		0x02,// length of this data
-		GAP_ADTYPE_POWER_LEVEL, 0x00,       // 0dBm
+		GAP_ADTYPE_POWER_LEVEL, 0x00       // 0dBm
 
-		// Device ID rsp
-		0x05,
-		ETX_ADTYPE_DEVID, 0x00, 0x00, 0x00, 0x00
 };
 
 // GAP GATT Attributes
@@ -793,6 +798,13 @@ static void ETX_EVT_GAPRoleStateChange(gaprole_States_t newState) {
 				uout0(Util_convertBdAddr2Str(peerAddress));
 			}
 
+			{
+				uint16_t connHdl = GAP_CONNHANDLE_INIT;
+				GAPRole_GetParameter(GAPROLE_CONNHANDLE, &connHdl);
+				HCI_EXT_DisconnectImmedCmd(connHdl);
+				ETX_CBm_appStateChange(APP_STATE_IDLE);
+			}
+
 		}
 		break;
 
@@ -888,7 +900,7 @@ static void ETX_EVT_keyPress(uint8_t shift, uint8_t keys) {
 		case APP_STATE_INIT:
 			if (keys < KEY_OK) { // number key pressed
 				destBSID = keys;
-				advertData[9] = destBSID;
+				advertData[2] = destBSID;
 				uout1("destiny BS set to: %d", destBSID);
 			}
 
@@ -905,11 +917,14 @@ static void ETX_EVT_keyPress(uint8_t shift, uint8_t keys) {
 		case APP_STATE_IDLE:
 			if (keys < KEY_OK) { // number key pressed
 				userData = keys;
+				advertData[11] = userData;
 				uout1("response set to: %d", userData);
 			}
 			if ((keys == KEY_OK) && (userData != 0)) {
 				bStatus_t rtn;
-				rtn = ETXProfile_SetParameter(ETXPROFILE_DATA, sizeof(userData), &userData);
+				//rtn = ETXProfile_SetParameter(ETXPROFILE_DATA, sizeof(userData), &userData);
+				rtn = GAPRole_SetParameter(GAPROLE_ADVERT_DATA,
+						sizeof(advertData), advertData);
 				if (rtn == SUCCESS)
 						ETX_CBm_appStateChange(APP_STATE_ACTIVE);
 			}
@@ -938,9 +953,10 @@ static void ETX_EVT_appStateChange(AppState_t newState) {
 	switch (newState) {
 		case APP_STATE_INIT:
 			destBSID = 0x00;
-			advertData[9] = destBSID;
+			advertData[2] = destBSID;
 			userData = 0x00;
-			ETXProfile_SetParameter(ETXPROFILE_DATA, sizeof(userData), &userData);
+			advertData[11] = userData;
+			//ETXProfile_SetParameter(ETXPROFILE_DATA, sizeof(userData), &userData);
 
 			{
 				uint8_t adEnable = FALSE;
@@ -1013,10 +1029,10 @@ static void ETX_DevId_Refresh(uint8_t IdPrefix, uint8_t* nvBuf) {
 
 static void ETX_DevID_updateScanRsp() {
 
-	scanRspData[11] = devID[0];
-	scanRspData[12] = devID[1];
-	scanRspData[13] = devID[2];
-	scanRspData[14] = devID[3];
+	advertData[5] = devID[0];
+	advertData[6] = devID[1];
+	advertData[7] = devID[2];
+	advertData[8] = devID[3];
 }
 
 /******************************************************************************
