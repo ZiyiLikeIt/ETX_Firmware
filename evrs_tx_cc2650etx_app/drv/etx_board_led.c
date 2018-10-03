@@ -110,36 +110,44 @@ void Board_ledControl(BoardLedID_t ledID, BoardLedState_t state,
 			PIN_setOutputValue(ledPinHandle, IDPARSER(ledID), 0);
 			if (ledState[ledID] == BOARD_LED_STATE_FLASH)
 				Util_stopClock(&ledFlashClk[ledID]);
+			ledState[ledID] = state;
+			ledPeriod[ledID] = period;
 		break;
 
 		case BOARD_LED_STATE_ON:
 			PIN_setOutputValue(ledPinHandle, IDPARSER(ledID), 1);
 			if (ledState[ledID] == BOARD_LED_STATE_FLASH)
 				Util_stopClock(&ledFlashClk[ledID]);
+			ledState[ledID] = state;
+			ledPeriod[ledID] = period;
 		break;
 
-		case BOARD_LED_STATE_TOGGLE:
-			if (ledState[ledID] == BOARD_LED_STATE_FLASH)
-				Util_stopClock(&ledFlashClk[ledID]);
-			PIN_setOutputValue(ledPinHandle, IDPARSER(ledID),
-					!PIN_getOutputValue(IDPARSER(ledID)));
+		case BOARD_LED_STATE_LOW:
+			PIN_setOutputValue(ledPinHandle, IDPARSER(ledID), 0);
+		break;
+
+		case BOARD_LED_STATE_HIGH:
+			PIN_setOutputValue(ledPinHandle, IDPARSER(ledID), 1);
 		break;
 
 		case BOARD_LED_STATE_FLASH:
 			PIN_setOutputValue(ledPinHandle, IDPARSER(ledID), 0);
 			Util_restartClock(&ledFlashClk[ledID], period);
+			ledState[ledID] = state;
+			ledPeriod[ledID] = period;
 		break;
 
 		case BOARD_LED_STATE_LOWFLASH:
 			PIN_setOutputValue(ledPinHandle, IDPARSER(ledID), 0);
 			Util_restartClock(&ledFlashClk[ledID], period);
+			ledState[ledID] = state;
+			ledPeriod[ledID] = period;
 		break;
 
 		default:
 		break;
 	}
-	ledState[ledID] = state;
-	ledPeriod[ledID] = period;
+
 }
 
 /*

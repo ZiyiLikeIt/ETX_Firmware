@@ -64,18 +64,18 @@
 
 // Minimum connection interval (units of 1.25ms, 80=100ms) if automatic
 // parameter update request is enabled
-#define DEFAULT_DESIRED_MIN_CONN_INTERVAL     16
+#define DEFAULT_DESIRED_MIN_CONN_INTERVAL     32
 
 // Maximum connection interval (units of 1.25ms, 800=1000ms) if automatic
 // parameter update request is enabled
-#define DEFAULT_DESIRED_MAX_CONN_INTERVAL     400
+#define DEFAULT_DESIRED_MAX_CONN_INTERVAL     80
 
 // Slave latency to use if automatic parameter update request is enabled
 #define DEFAULT_DESIRED_SLAVE_LATENCY         0
 
 // Supervision timeout value (units of 10ms, 1000=10s) if automatic parameter
 // update request is enabled
-#define DEFAULT_DESIRED_CONN_TIMEOUT          1000
+#define DEFAULT_DESIRED_CONN_TIMEOUT          500
 
 // Whether to enable automatic parameter update request when a connection is
 // formed
@@ -228,7 +228,7 @@ static void ETX_freeAttRsp(uint8_t status);
 static void ETX_CB_GAPRoleStateChange(gaprole_States_t newState);
 static void ETX_CB_charValueChange(uint8_t paramID);
 static void ETX_CB_charValueEnquire(uint8_t paramID);
-void ETX_CB_keyPress(uint8_t keys);
+static void ETX_CB_keyPress(uint8_t keys);
 static void ETX_CBm_appStateChange(AppState_t newState);
 
 /** Event process service **/
@@ -695,7 +695,7 @@ static void ETX_CB_charValueEnquire(uint8_t paramID) {
 }
 
 /** callback for key pressed **/
-void ETX_CB_keyPress(uint8_t keys) {
+static void ETX_CB_keyPress(uint8_t keys) {
 	ETX_enqueueMsg(ETX_KEY_PRESS_EVT, keys);
 }
 
@@ -863,9 +863,9 @@ static void ETX_EVT_charValueEnquire(uint8_t paramID) {
 			ETXProfile_GetParameter(ETXPROFILE_DATA, &newValue);
 			uout1("User Data Submitted: 0x%02x", (uint8_t )newValue);
 
-			newValue = 0;
+			userData = 0;
 			ETXProfile_SetParameter(ETXPROFILE_DATA, sizeof(newValue),
-					&newValue);
+					&userData);
 
 			ETX_CBm_appStateChange(APP_STATE_IDLE);
 
@@ -883,6 +883,7 @@ static void ETX_EVT_keyPress(uint8_t shift, uint8_t keys) {
 	// ok and lower number will have higher priority
 
 	uout1("key pressed: S%d", keys);
+	Board_ledHIGH(BOARD_RLED);
 	switch (appState) {
 		case APP_STATE_INIT:
 			if (keys < KEY_OK) { // number key pressed
@@ -906,7 +907,7 @@ static void ETX_EVT_keyPress(uint8_t shift, uint8_t keys) {
 				userData = keys;
 				uout1("response set to: %d", userData);
 			}
-			if (keys == KEY_OK) {
+			if ((keys == KEY_OK) && (userData != 0)) {
 				bStatus_t rtn;
 				rtn = ETXProfile_SetParameter(ETXPROFILE_DATA, sizeof(userData), &userData);
 				if (rtn == SUCCESS)
@@ -914,12 +915,13 @@ static void ETX_EVT_keyPress(uint8_t shift, uint8_t keys) {
 			}
 		break;
 		case APP_STATE_ACTIVE:
-			// no key response
 		break;
 		default:
 		break;
 
 	}
+	Board_ledLOW(BOARD_RLED);
+
 	if (keys == KEY_PWR) {
 		ETX_EVT_appStateChange(APP_STATE_INIT);
 		Board_ledOFF(BOARD_RLED);
