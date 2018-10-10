@@ -696,6 +696,7 @@ static void ETX_CB_charValueEnquire(uint8_t paramID) {
 
 /** callback for key pressed **/
 static void ETX_CB_keyPress(uint8_t keys) {
+    Board_ledON(BOARD_RLED);
 	ETX_enqueueMsg(ETX_KEY_PRESS_EVT, keys);
 }
 
@@ -881,9 +882,9 @@ static void ETX_EVT_charValueEnquire(uint8_t paramID) {
 static void ETX_EVT_keyPress(uint8_t shift, uint8_t keys) {
 	// all keys should be exclusive
 	// ok and lower number will have higher priority
-
+    Board_ledOFF(BOARD_RLED);
 	uout1("key pressed: S%d", keys);
-	Board_ledHIGH(BOARD_RLED);
+	//Board_ledON(BOARD_RLED);
 	switch (appState) {
 		case APP_STATE_INIT:
 			if (keys < KEY_OK) { // number key pressed
@@ -920,7 +921,7 @@ static void ETX_EVT_keyPress(uint8_t shift, uint8_t keys) {
 		break;
 
 	}
-	Board_ledLOW(BOARD_RLED);
+	//Board_ledOFF(BOARD_RLED);
 
 	if (keys == KEY_PWR) {
 		ETX_EVT_appStateChange(APP_STATE_INIT);
@@ -949,9 +950,9 @@ static void ETX_EVT_appStateChange(AppState_t newState) {
 			}
 
 			if (isBatLow) // battery level is low?
-				Board_ledFlash(BOARD_RLED, 500);
+			    Board_ledFlash(BOARD_RLED, 500);
 			else
-				Board_ledLowFlash(BOARD_RLED, 2000);
+			    Board_ledLowFlash(BOARD_RLED, 1500);
 			Board_ledOFF(BOARD_BLED);
 		break;
 
@@ -961,7 +962,7 @@ static void ETX_EVT_appStateChange(AppState_t newState) {
 				GAPRole_SetParameter(GAPROLE_ADVERT_ENABLED, sizeof(uint8_t),
 						&adEnable);
 			}
-
+			Board_ledOFF(BOARD_RLED);
 			Board_ledLowFlash(BOARD_BLED, 1000);
 
 		break;
@@ -972,6 +973,7 @@ static void ETX_EVT_appStateChange(AppState_t newState) {
 				GAPRole_SetParameter(GAPROLE_ADVERT_ENABLED, sizeof(uint8_t),
 						&adEnable);
 			}
+			Board_ledOFF(BOARD_RLED);
 			Board_ledFlash(BOARD_BLED, 100);
 		break;
 
